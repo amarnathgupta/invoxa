@@ -1,15 +1,17 @@
-# invoice
+# Invoxa: A production-ready invoicing system
 
-To install dependencies:
+Production-ready invoicing system built with Prisma, PostgreSQL, and Bun.
 
-```bash
-bun install
-```
+## Features
 
-To run:
+- Multi-organization support
+- Client management
+- Invoice generation
+- Payment tracking
 
-```bash
-bun run index.ts
-```
+## Tech Stack
 
-This project was created using `bun init` in bun v1.3.4. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+- Prisma
+- PostgreSQL
+- Bun
+- TypeScript

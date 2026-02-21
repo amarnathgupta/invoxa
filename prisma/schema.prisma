@@ -1,14 +1,170 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model User {
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  password   String
+  otpSecret  String?
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  organizations Organization[]
+}
+
+model Organization {
+  id           String    @id @default(uuid())
+  name         String
+  slug         String    @unique
+  logoUrl      String?
+  email        String
+  phone        String
+  website      String?
+  gstNumber    String? // India GST
+  taxId        String? // generic tax id
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String?
+  ownerId      String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  owner        User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  clients      Client[]
+  invoices     Invoice[]
+  deletedAt    DateTime?
+
+  @@index([ownerId])
+  @@index([email])
+  @@index([phone])
+}
+
+model Client {
+  id             String  @id @default(uuid())
+  organizationId String
+  name           String // Person behalf company
+  companyName    String?
+  email          String
+  phone          String
+  website        String?
+  taxId          String?
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invoices     Invoice[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([organizationId])
+}
+
+model Invoice {
+  id             String @id @default(uuid())
+  organizationId String
+  clientId       String
+
+  invoiceNumber String        
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime?
+  status        InvoiceStatus @default(PENDING)
+
+  paidAmount  Int  @default(0)
+
+  subtotal    Int
+  tax         Int  @default(0)
+  totalAmount Int
+  currency    String @default("INR")
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deletedAt DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client        @relation(fields: [clientId], references: [id])
+  items        InvoiceItem[]
+  payments     Payment[]
+
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([status])
+  @@unique([invoiceNumber, organizationId])
+}
+
+model InvoiceItem {
+  id          String @id @default(uuid())
+  invoiceId   String
+  name        String
+  description String?
+  quantity    Int
+  unitPrice   Int
+  totalPrice  Int
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  invoiceId     String
+  amount        Int
+  paymentDate   DateTime      @default(now())
+  paymentMethod PaymentMethod?
+  transactionId String?
+  status        PaymentStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  BANK_TRANSFER
+  PAYPAL
+  STRIPE
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
 }
