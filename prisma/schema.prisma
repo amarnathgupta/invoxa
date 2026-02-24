@@ -25,7 +25,7 @@ model User {
 model Organization {
   id           String    @id @default(uuid())
   name         String
-  slug         String    @unique
+  slug         String    // Unique at owner level
   logoUrl      String?
   email        String
   phone        String
@@ -46,7 +46,7 @@ model Organization {
   invoices     Invoice[]
   deletedAt    DateTime?
 
-  @@index([ownerId])
+  @@unique([ownerId, slug])
   @@index([email])
   @@index([phone])
 }
