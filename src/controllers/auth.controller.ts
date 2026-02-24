@@ -147,3 +147,49 @@ export const getOtpController = async (req: AuthRequest, res: Response) => {
     return errorResponse(res, 500, "Something went wrong");
   }
 };
+
+export const verifyOtpController = async (req: Request, res: Response) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return errorResponse(res, 400, "Missing email or otp");
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        otpSecret: true,
+        otpLastSentAt: true,
+      },
+    });
+    if (!user) {
+      return errorResponse(res, 404, "User not found");
+    }
+    if (!user.otpSecret || !user.otpLastSentAt) {
+      return errorResponse(res, 400, "OTP not sent");
+    }
+    const diff = Date.now() - user.otpLastSentAt.getTime();
+    if (diff > 12 * 60 * 60 * 1000) {
+      return errorResponse(res, 400, "OTP has expired");
+    }
+    if (user.otpSecret !== otp) {
+      return errorResponse(res, 400, "Invalid OTP");
+    }
+
+    await prisma.user.update({
+      where: {
+        email,
+      },
+      data: {
+        isVerified: true,
+        otpSecret: null,
+        otpLastSentAt: null,
+      },
+    });
+
+    return successResponse(res, 200, "OTP verified successfully");
+  } catch (error) {
+    return errorResponse(res, 500, "Something went wrong");
+  }
+};
