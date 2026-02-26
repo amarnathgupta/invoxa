@@ -1,7 +1,10 @@
 import type { Response } from "express";
 import { errorResponse, generateUniqueSlug, successResponse } from "../utils";
 import type { AuthRequest } from "../middlewares";
-import { createOrganizationInputSchema } from "../schemas";
+import {
+  createOrganizationInputSchema,
+  updateOrganizationInputSchema,
+} from "../schemas";
 import { prisma } from "../lib/prisma";
 
 export const createOrganizationController = async (
@@ -177,6 +180,50 @@ export const getOrganizationByIdController = async (
       200,
       "Organization fetched successfully",
       organization,
+    );
+  } catch (error) {
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
+
+export const updateOrganizationController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req?.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const { id } = req.params;
+  if (!id || typeof id !== "string") {
+    return errorResponse(res, 400, "Invalid slug");
+  }
+  const result = updateOrganizationInputSchema.safeParse(req.body);
+  if (!result.success) {
+    return errorResponse(res, 400, result.error.message);
+  }
+  try {
+    const organization = await prisma.organization.findUnique({
+      where: {
+        id,
+        ownerId: req.user.id,
+      },
+    });
+    if (!organization) {
+      return errorResponse(res, 404, "Organization not found");
+    }
+    const updatedOrganization = await prisma.organization.update({
+      where: {
+        id,
+      },
+      data: {
+        ...result.data,
+      },
+    });
+    return successResponse(
+      res,
+      200,
+      "Organization updated successfully",
+      updatedOrganization,
     );
   } catch (error) {
     return errorResponse(res, 500, "Internal server error");
