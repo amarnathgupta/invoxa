@@ -86,14 +86,16 @@ export const getAllOrganizationController = async (
   if (!req?.user) {
     return errorResponse(res, 401, "Unauthorized");
   }
-  const { limit, page } = req.query;
+  const { limit, page, status = "all" } = req.query;
   const limitValue = limit ? parseInt(limit as string) : 10;
   const pageValue = page ? parseInt(page as string) : 1;
   try {
+    const deleted =
+      status === "deleted" ? { deletedAt: { not: null } } : { deletedAt: null };
     const organizations = await prisma.organization.findMany({
       where: {
         ownerId: req.user.id,
-        deletedAt: null,
+        ...deleted,
       },
       take: limitValue,
       skip: (pageValue - 1) * limitValue,
