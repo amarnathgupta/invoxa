@@ -251,6 +251,9 @@ export const deleteOrganizationController = async (
     if (!organization) {
       return errorResponse(res, 404, "Organization not found");
     }
+    if (organization.deletedAt) {
+      return errorResponse(res, 400, "Organization already deleted");
+    }
     await prisma.organization.update({
       where: {
         id,
