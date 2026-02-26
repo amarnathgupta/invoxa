@@ -195,7 +195,7 @@ export const updateOrganizationController = async (
   }
   const { id } = req.params;
   if (!id || typeof id !== "string") {
-    return errorResponse(res, 400, "Invalid slug");
+    return errorResponse(res, 400, "Invalid id");
   }
   const result = updateOrganizationInputSchema.safeParse(req.body);
   if (!result.success) {
@@ -225,6 +225,41 @@ export const updateOrganizationController = async (
       "Organization updated successfully",
       updatedOrganization,
     );
+  } catch (error) {
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
+
+export const deleteOrganizationController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req?.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const { id } = req.params;
+  if (!id || typeof id !== "string") {
+    return errorResponse(res, 400, "Invalid id");
+  }
+  try {
+    const organization = await prisma.organization.findUnique({
+      where: {
+        id,
+        ownerId: req.user.id,
+      },
+    });
+    if (!organization) {
+      return errorResponse(res, 404, "Organization not found");
+    }
+    await prisma.organization.update({
+      where: {
+        id,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+    return successResponse(res, 200, "Organization deleted successfully");
   } catch (error) {
     return errorResponse(res, 500, "Internal server error");
   }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createOrganizationController,
+  deleteOrganizationController,
   getAllOrganizationController,
   getOrganizationByIdController,
   getOrganizationBySlugController,
@@ -16,3 +17,4 @@ organizationRouter.get("/id/:id", getOrganizationByIdController);
 organizationRouter.get("/:slug", getOrganizationBySlugController);
 organizationRouter.post("/", createOrganizationController);
 organizationRouter.put("/:id", updateOrganizationController);
+organizationRouter.delete("/:id", deleteOrganizationController);
