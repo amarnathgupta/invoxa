@@ -151,3 +151,34 @@ export const getOrganizationBySlugController = async (
     return errorResponse(res, 500, "Internal server error");
   }
 };
+
+export const getOrganizationByIdController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req?.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const { id } = req.params;
+  if (!id || typeof id !== "string") {
+    return errorResponse(res, 400, "Invalid slug");
+  }
+  try {
+    const organization = await prisma.organization.findUnique({
+      where: {
+        id,
+      },
+    });
+    if (!organization) {
+      return errorResponse(res, 404, "Organization not found");
+    }
+    return successResponse(
+      res,
+      200,
+      "Organization fetched successfully",
+      organization,
+    );
+  } catch (error) {
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
