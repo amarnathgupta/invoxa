@@ -4,6 +4,9 @@ import type { AuthRequest } from "../middlewares";
 import {
   createOrganizationInputSchema,
   generateSlugSchema,
+  getOrgBySlugSchema,
+  paramSchema,
+  querySchema,
   updateOrganizationInputSchema,
 } from "../schemas";
 import { prisma } from "../lib/prisma";
@@ -13,12 +16,17 @@ export const createOrganizationController = async (
   req: AuthRequest,
   res: Response,
 ) => {
-  if (!req?.user) {
+  if (!req.user) {
     return errorResponse(res, 401, "Unauthorized");
   }
-  const result = createOrganizationInputSchema.safeParse(req.body);
-  if (!result.success) {
-    return errorResponse(res, 400, result.error.message);
+  const parsed = createOrganizationInputSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(parsed.error).fieldErrors,
+    );
   }
   const {
     name,
@@ -35,19 +43,15 @@ export const createOrganizationController = async (
     country,
     postalCode,
     slug,
-  } = result.data;
+  } = parsed.data;
+  if (!gstNumber && !taxId) {
+    return errorResponse(res, 400, "Either GST number or Tax ID is required");
+  }
   try {
-    const user = await prisma.user.findUnique({
-      where: {
-        id: req.user.id,
-      },
-      select: {
-        isVerified: true,
-      },
-    });
-    if (user && !user.isVerified) {
-      return errorResponse(res, 400, "User is not verified");
+    if (!req.user.isVerified) {
+      return errorResponse(res, 403, "User is not verified");
     }
+
     const slugValue: string =
       slug ?? (await generateUniqueSlug(req.user.id, name));
     const organization = await prisma.organization.create({
@@ -76,6 +80,7 @@ export const createOrganizationController = async (
       organization,
     );
   } catch (error) {
+    console.error("createOrganizationController error:", error);
     const e = error as { code: string };
     if (e.code === "P2002") {
       return errorResponse(res, 400, "Slug already exists");
@@ -88,37 +93,58 @@ export const getAllOrganizationController = async (
   req: AuthRequest,
   res: Response,
 ) => {
-  if (!req?.user) {
+  if (!req.user) {
     return errorResponse(res, 401, "Unauthorized");
   }
-  const { limit, page, status = "all" } = req.query;
-  const limitValue = limit ? parseInt(limit as string) : 10;
-  const pageValue = page ? parseInt(page as string) : 1;
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(parsed.error).fieldErrors,
+    );
+  }
+  const { limit, page, status } = parsed.data;
+
   try {
-    const deleted =
-      status === "deleted" ? { deletedAt: { not: null } } : { deletedAt: null };
-    const organizations = await prisma.organization.findMany({
-      where: {
-        ownerId: req.user.id,
-        ...deleted,
-      },
-      take: limitValue,
-      skip: (pageValue - 1) * limitValue,
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-    if (organizations.length === 0) {
-      return errorResponse(res, 404, "No organizations found");
-    }
+    const where = {
+      ownerId: req.user.id,
+      ...(status === "deleted"
+        ? { deletedAt: { not: null } }
+        : status === "active"
+          ? { deletedAt: null }
+          : {}),
+    };
+
+    const [total, organizations] = await Promise.all([
+      prisma.organization.count({
+        where,
+      }),
+      prisma.organization.findMany({
+        where,
+        take: limit,
+        skip: (page - 1) * limit,
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+    ]);
+
     return successResponse(
       res,
       200,
       "Organizations fetched successfully",
       organizations,
-      { limit: limitValue, page: pageValue, total: organizations.length },
+      {
+        limit: limit,
+        page: page,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     );
   } catch (error) {
+    console.error("getAllOrganizationController error:", error);
     return errorResponse(res, 500, "Internal server error");
   }
 };
@@ -127,13 +153,19 @@ export const getOrganizationBySlugController = async (
   req: AuthRequest,
   res: Response,
 ) => {
-  if (!req?.user) {
+  if (!req.user) {
     return errorResponse(res, 401, "Unauthorized");
   }
-  const { slug } = req.params;
-  if (!slug || typeof slug !== "string") {
-    return errorResponse(res, 400, "Invalid slug");
+  const parsed = paramSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(parsed.error).fieldErrors,
+    );
   }
+  const { slug } = parsed.data;
   try {
     const organization = await prisma.organization.findUnique({
       where: {
@@ -141,6 +173,7 @@ export const getOrganizationBySlugController = async (
           ownerId: req.user.id,
           slug,
         },
+        deletedAt: null,
       },
     });
     if (!organization) {
@@ -153,6 +186,7 @@ export const getOrganizationBySlugController = async (
       organization,
     );
   } catch (error) {
+    console.error("getOrganizationBySlugController error:", error);
     return errorResponse(res, 500, "Internal server error");
   }
 };
@@ -161,47 +195,12 @@ export const getOrganizationByIdController = async (
   req: AuthRequest,
   res: Response,
 ) => {
-  if (!req?.user) {
-    return errorResponse(res, 401, "Unauthorized");
-  }
-  const { id } = req.params;
-  if (!id || typeof id !== "string") {
-    return errorResponse(res, 400, "Invalid slug");
-  }
-  try {
-    const organization = await prisma.organization.findUnique({
-      where: {
-        id,
-      },
-    });
-    if (!organization) {
-      return errorResponse(res, 404, "Organization not found");
-    }
-    return successResponse(
-      res,
-      200,
-      "Organization fetched successfully",
-      organization,
-    );
-  } catch (error) {
-    return errorResponse(res, 500, "Internal server error");
-  }
-};
-
-export const updateOrganizationController = async (
-  req: AuthRequest,
-  res: Response,
-) => {
-  if (!req?.user) {
+  if (!req.user) {
     return errorResponse(res, 401, "Unauthorized");
   }
   const { id } = req.params;
   if (!id || typeof id !== "string") {
     return errorResponse(res, 400, "Invalid id");
-  }
-  const result = updateOrganizationInputSchema.safeParse(req.body);
-  if (!result.success) {
-    return errorResponse(res, 400, result.error.message);
   }
   try {
     const organization = await prisma.organization.findUnique({
@@ -213,12 +212,49 @@ export const updateOrganizationController = async (
     if (!organization) {
       return errorResponse(res, 404, "Organization not found");
     }
+    return successResponse(
+      res,
+      200,
+      "Organization fetched successfully",
+      organization,
+    );
+  } catch (error) {
+    console.error("getOrganizationByIdController error:", error);
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
+
+export const updateOrganizationController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const paramSchema = z.object({ id: z.string().min(1) });
+  const paramParsed = paramSchema.safeParse(req.params);
+  if (!paramParsed.success) {
+    return errorResponse(res, 400, "Invalid id");
+  }
+  const { id } = paramParsed.data;
+  const parsed = updateOrganizationInputSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(parsed.error).fieldErrors,
+    );
+  }
+  try {
     const updatedOrganization = await prisma.organization.update({
       where: {
         id,
+        ownerId: req.user.id,
+        deletedAt: null,
       },
       data: {
-        ...result.data,
+        ...parsed.data,
       },
     });
     return successResponse(
@@ -228,6 +264,14 @@ export const updateOrganizationController = async (
       updatedOrganization,
     );
   } catch (error) {
+    console.error("updateOrganizationController error:", error);
+    const e = error as { code: string };
+    if (e.code === "P2025") {
+      return errorResponse(res, 404, "Organization not found");
+    }
+    if (e.code === "P2002") {
+      return errorResponse(res, 400, "Slug already exists");
+    }
     return errorResponse(res, 500, "Internal server error");
   }
 };
@@ -236,29 +280,21 @@ export const deleteOrganizationController = async (
   req: AuthRequest,
   res: Response,
 ) => {
-  if (!req?.user) {
+  if (!req.user) {
     return errorResponse(res, 401, "Unauthorized");
   }
-  const { id } = req.params;
-  if (!id || typeof id !== "string") {
+  const paramSchema = z.object({ id: z.string().min(1) });
+  const paramParsed = paramSchema.safeParse(req.params);
+  if (!paramParsed.success) {
     return errorResponse(res, 400, "Invalid id");
   }
+  const { id } = paramParsed.data;
   try {
-    const organization = await prisma.organization.findUnique({
-      where: {
-        id,
-        ownerId: req.user.id,
-      },
-    });
-    if (!organization) {
-      return errorResponse(res, 404, "Organization not found");
-    }
-    if (organization.deletedAt) {
-      return errorResponse(res, 400, "Organization already deleted");
-    }
     await prisma.organization.update({
       where: {
         id,
+        ownerId: req.user.id,
+        deletedAt: null,
       },
       data: {
         deletedAt: new Date(),
@@ -266,6 +302,10 @@ export const deleteOrganizationController = async (
     });
     return successResponse(res, 200, "Organization deleted successfully");
   } catch (error) {
+    console.error("deleteOrganizationController error:", error);
+    const e = error as { code: string };
+    if (e.code === "P2025")
+      return errorResponse(res, 404, "Organization not found");
     return errorResponse(res, 500, "Internal server error");
   }
 };

@@ -46,3 +46,11 @@ export const updateOrganizationInputSchema = z.object({
 export const generateSlugSchema = z.object({
   name: z.string().min(1, "Name is required"),
 });
+
+export const querySchema = z.object({
+  limit: z.coerce.number().min(1).max(100).default(10),
+  page: z.coerce.number().min(1).default(1),
+  status: z.enum(["active", "deleted", "all"]).default("active"),
+});
+
+export const paramSchema = z.object({ slug: z.string().min(1) });
