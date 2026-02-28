@@ -3,9 +3,11 @@ import { errorResponse, generateUniqueSlug, successResponse } from "../utils";
 import type { AuthRequest } from "../middlewares";
 import {
   createOrganizationInputSchema,
+  generateSlugSchema,
   updateOrganizationInputSchema,
 } from "../schemas";
 import { prisma } from "../lib/prisma";
+import z from "zod";
 
 export const createOrganizationController = async (
   req: AuthRequest,
@@ -264,6 +266,32 @@ export const deleteOrganizationController = async (
     });
     return successResponse(res, 200, "Organization deleted successfully");
   } catch (error) {
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
+
+export const generateSlugController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const result = generateSlugSchema.safeParse(req.body);
+  if (!result.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(result.error).fieldErrors,
+    );
+  }
+  try {
+    const { name } = result.data;
+    const slug = await generateUniqueSlug(req.user.id, name);
+    return successResponse(res, 200, "Slug generated successfully", { slug });
+  } catch (error) {
+    console.error("generateSlugController error:", error);
     return errorResponse(res, 500, "Internal server error");
   }
 };

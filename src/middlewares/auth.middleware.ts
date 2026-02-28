@@ -2,8 +2,18 @@ import type { NextFunction, Request, Response } from "express";
 import { errorResponse } from "../utils";
 import jwt from "jsonwebtoken";
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is not defined");
+}
+
+interface JwtPayload {
+  id: string;
+  email: string;
+}
+
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: JwtPayload;
 }
 
 export const authMiddleware = (
@@ -20,10 +30,11 @@ export const authMiddleware = (
     return errorResponse(res, 401, "Unauthorized");
   }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
     req.user = decoded;
     next();
   } catch (error) {
+    console.error("JWT verification failed:", error);
     return errorResponse(res, 401, "Unauthorized");
   }
 };

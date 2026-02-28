@@ -28,8 +28,12 @@ export async function generateUniqueSlug(
       slug: true,
     },
   });
-
   if (existingSlugs.length === 0) {
+    return baseSlug;
+  }
+
+  const exactMatch = existingSlugs.some((org) => org.slug === baseSlug);
+  if (!exactMatch) {
     return baseSlug;
   }
 
@@ -37,9 +41,7 @@ export async function generateUniqueSlug(
   const slugNumbers = existingSlugs.map((org) => {
     const parts = org.slug.split("-");
     const lastPart = parts[parts.length - 1];
-
     const num = Number(lastPart);
-
     return Number.isNaN(num) ? 0 : num;
   });
 

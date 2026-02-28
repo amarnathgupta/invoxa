@@ -19,9 +19,11 @@ export function errorResponse(
   res: Response,
   statusCode: number,
   message: string,
+  error?: unknown,
 ) {
   res.status(statusCode).json({
     success: false,
     message,
+    error,
   });
 }

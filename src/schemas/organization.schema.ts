@@ -42,3 +42,7 @@ export const updateOrganizationInputSchema = z.object({
   country: z.string().optional(),
   postalCode: z.string().optional(),
 });
+
+export const generateSlugSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+});
