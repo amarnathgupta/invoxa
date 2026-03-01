@@ -11,7 +11,7 @@ export const authRouter = Router();
 
 authRouter.post("/register", registerController);
 authRouter.post("/login", loginController);
-authRouter.post("/verify-otp", verifyOtpController);
+authRouter.post("/otp/verify", verifyOtpController);
 
 authRouter.use(authMiddleware);
-authRouter.get("/get-otp", getOtpController);
+authRouter.post("/otp/send", getOtpController);

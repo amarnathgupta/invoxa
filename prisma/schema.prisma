@@ -20,6 +20,8 @@ model User {
   otpLastSentAt DateTime?
 
   organizations Organization[]
+
+  @@index([deletedAt])
 }
 
 model Organization {
@@ -86,19 +88,17 @@ model Client {
 model Invoice {
   id             String @id @default(uuid())
   organizationId String
-  clientId       String
+  clientId       String?
 
   invoiceNumber String        
   issueDate     DateTime      @default(now())
   dueDate       DateTime?
   status        InvoiceStatus @default(PENDING)
 
-  paidAmount  Int  @default(0)
-
   subtotal    Int
   tax         Int  @default(0)
   totalAmount Int
-  currency    String @default("INR")
+  currency    Currency @default(INR)
 
   notes String?
 
@@ -108,7 +108,7 @@ model Invoice {
   deletedAt DateTime?
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  client       Client        @relation(fields: [clientId], references: [id])
+  client       Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
   items        InvoiceItem[]
   payments     Payment[]
 
@@ -127,7 +127,7 @@ model InvoiceItem {
   unitPrice   Int
   totalPrice  Int
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
 }
@@ -142,6 +142,7 @@ model Payment {
   status        PaymentStatus @default(PENDING)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   deletedAt DateTime?
   invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
@@ -168,4 +169,10 @@ enum PaymentStatus {
   PENDING
   COMPLETED
   FAILED
+}
+
+enum Currency {
+  INR
+  USD
+  EUR
 }

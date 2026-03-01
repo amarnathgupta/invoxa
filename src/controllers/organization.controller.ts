@@ -4,7 +4,6 @@ import type { AuthRequest } from "../middlewares";
 import {
   createOrganizationInputSchema,
   generateSlugSchema,
-  getOrgBySlugSchema,
   paramSchema,
   querySchema,
   updateOrganizationInputSchema,
