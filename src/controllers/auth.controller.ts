@@ -266,7 +266,7 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
       },
     });
     if (user) {
-      const token = generateToken(user.email);
+      const token = generateToken({ email: user.email });
       await sendResetPasswordEmail(user.email, token);
     }
 

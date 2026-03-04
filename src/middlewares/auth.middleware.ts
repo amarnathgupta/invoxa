@@ -10,7 +10,7 @@ if (!JWT_SECRET) {
 interface JwtPayload {
   id: string;
   email: string;
-  isVerified: boolean;
+  // isVerified: boolean;
 }
 
 export interface AuthRequest extends Request {
