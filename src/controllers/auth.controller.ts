@@ -1,15 +1,25 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma";
-import jwt from "jsonwebtoken";
-import { errorResponse, generateOtp, successResponse } from "../utils";
+import {
+  errorResponse,
+  generateOtp,
+  generateToken,
+  successResponse,
+} from "../utils";
 import type { AuthRequest } from "../middlewares";
-import { sendOtpEmail } from "../services";
-import { loginSchema, registerSchema, verifyOtpSchema } from "../schemas";
+import { sendOtpEmail, sendResetPasswordEmail } from "../services";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  verifyOtpSchema,
+} from "../schemas";
 import z from "zod";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("JWT_SECRET not defined");
+const FIXED_TIME = 500;
 
 export const registerController = async (req: Request, res: Response) => {
   const parsed = registerSchema.safeParse(req.body);
@@ -40,9 +50,7 @@ export const registerController = async (req: Request, res: Response) => {
       id: user.id,
       email: user.email,
     };
-    const token = jwt.sign(payload, JWT_SECRET, {
-      expiresIn: "1d",
-    });
+    const token = generateToken(payload);
 
     return successResponse(res, 201, "User created successfully", {
       token,
@@ -82,9 +90,10 @@ export const loginController = async (req: Request, res: Response) => {
       },
     });
 
+    const DUMMY_HASH = await bcrypt.hash("dummy", 12);
     const isPasswordCorrect = user
       ? await bcrypt.compare(password, user.password)
-      : false;
+      : await bcrypt.compare(password, DUMMY_HASH);
 
     if (!user || !isPasswordCorrect) {
       return errorResponse(res, 401, "Invalid email or password");
@@ -94,9 +103,7 @@ export const loginController = async (req: Request, res: Response) => {
       id: user.id,
       email: user.email,
     };
-    const token = jwt.sign(payload, JWT_SECRET, {
-      expiresIn: "1d",
-    });
+    const token = generateToken(payload);
 
     return successResponse(res, 200, "User logged in successfully", {
       token,
@@ -163,7 +170,11 @@ export const getOtpController = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const verifyOtpController = async (req: Request, res: Response) => {
+export const verifyOtpController = async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const { email } = req.user;
   const parsed = verifyOtpSchema.safeParse(req.body);
   if (!parsed.success) {
     return errorResponse(
@@ -173,7 +184,7 @@ export const verifyOtpController = async (req: Request, res: Response) => {
       z.flattenError(parsed.error).fieldErrors,
     );
   }
-  const { email, otp } = parsed.data;
+  const { otp } = parsed.data;
   try {
     const user = await prisma.user.findUnique({
       where: {
@@ -189,6 +200,17 @@ export const verifyOtpController = async (req: Request, res: Response) => {
       return errorResponse(res, 404, "User not found");
     }
     if (user.isVerified) {
+      if (user.otpSecret) {
+        await prisma.user.update({
+          where: {
+            email,
+          },
+          data: {
+            otpSecret: null,
+            otpLastSentAt: null,
+          },
+        });
+      }
       return errorResponse(res, 400, "User already verified");
     }
     if (!user.otpSecret || !user.otpLastSentAt) {
@@ -196,12 +218,12 @@ export const verifyOtpController = async (req: Request, res: Response) => {
     }
     const diff = Date.now() - user.otpLastSentAt.getTime();
     if (diff > 12 * 60 * 60 * 1000) {
-      return errorResponse(res, 400, "OTP has expired");
+      return errorResponse(res, 400, "Invalid OTP");
     }
 
     const isOtpValid = await bcrypt.compare(otp, user.otpSecret);
     if (!isOtpValid) {
-      return errorResponse(res, 400, "Invalid Email or OTP");
+      return errorResponse(res, 400, "Invalid OTP");
     }
 
     await prisma.user.update({
@@ -218,6 +240,45 @@ export const verifyOtpController = async (req: Request, res: Response) => {
     return successResponse(res, 200, "OTP verified successfully");
   } catch (error) {
     console.error("verifyOtpController error:", error);
+    return errorResponse(res, 500, "Something went wrong");
+  }
+};
+
+export const forgotPasswordController = async (req: Request, res: Response) => {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(parsed.error).fieldErrors,
+    );
+  }
+  const { email } = parsed.data;
+  const startTime = Date.now();
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        email: true,
+      },
+    });
+    if (user) {
+      const token = generateToken(user.email);
+      await sendResetPasswordEmail(user.email, token);
+    }
+
+    const elapsed = Date.now() - startTime;
+    const remaining = FIXED_TIME - elapsed;
+    if (remaining > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remaining));
+    }
+
+    return successResponse(res, 200, "Reset password email sent successfully");
+  } catch (error) {
+    console.error("forgotPasswordController error:", error);
     return errorResponse(res, 500, "Something went wrong");
   }
 };

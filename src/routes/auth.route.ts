@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  forgotPasswordController,
   getOtpController,
   loginController,
   registerController,
@@ -11,7 +12,8 @@ export const authRouter = Router();
 
 authRouter.post("/register", registerController);
 authRouter.post("/login", loginController);
-authRouter.post("/otp/verify", verifyOtpController);
 
 authRouter.use(authMiddleware);
 authRouter.post("/otp/send", getOtpController);
+authRouter.post("/otp/verify", verifyOtpController);
+authRouter.post("/forgot-password", forgotPasswordController);
