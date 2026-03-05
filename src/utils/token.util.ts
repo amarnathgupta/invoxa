@@ -6,3 +6,5 @@ export const generateToken = (data: unknown) => {
   if (!data) throw new Error("No data provided");
   return jwt.sign(data, JWT_SECRET, { expiresIn: "1d" });
 };
+
+export const verifyToken = (token: string) => jwt.verify(token, JWT_SECRET);

@@ -6,6 +6,7 @@ import {
   generateOtp,
   generateToken,
   successResponse,
+  verifyToken,
 } from "../utils";
 import type { AuthRequest } from "../middlewares";
 import { sendOtpEmail, sendResetPasswordEmail } from "../services";
@@ -13,6 +14,7 @@ import {
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
+  resetPasswordSchema,
   verifyOtpSchema,
 } from "../schemas";
 import z from "zod";
@@ -90,10 +92,13 @@ export const loginController = async (req: Request, res: Response) => {
       },
     });
 
-    const DUMMY_HASH = await bcrypt.hash("dummy", 12);
-    const isPasswordCorrect = user
-      ? await bcrypt.compare(password, user.password)
-      : await bcrypt.compare(password, DUMMY_HASH);
+    let isPasswordCorrect: boolean;
+    if (user) {
+      isPasswordCorrect = await bcrypt.compare(password, user.password);
+    } else {
+      const DUMMY_HASH = await bcrypt.hash("dummy", 12);
+      isPasswordCorrect = await bcrypt.compare(password, DUMMY_HASH);
+    }
 
     if (!user || !isPasswordCorrect) {
       return errorResponse(res, 401, "Invalid email or password");
@@ -279,6 +284,56 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
     return successResponse(res, 200, "Reset password email sent successfully");
   } catch (error) {
     console.error("forgotPasswordController error:", error);
+    return errorResponse(res, 500, "Something went wrong");
+  }
+};
+
+export const resetPasswordController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  const { token } = req.query;
+  if (!token || typeof token !== "string") {
+    return errorResponse(res, 400, "Invalid token");
+  }
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(parsed.error).fieldErrors,
+    );
+  }
+  const { newPassword } = parsed.data;
+  try {
+    const decoded = verifyToken(token);
+    const { email } = decoded as { email: string };
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: {
+        email,
+      },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    return successResponse(res, 200, "Password reset successfully");
+  } catch (error) {
+    console.error("resetPasswordController error:", error);
+    const e = error as { name: string; code: string };
+
+    // JWT errors
+    if (e.name === "TokenExpiredError")
+      return errorResponse(res, 401, "Token expired");
+    if (e.name === "JsonWebTokenError")
+      return errorResponse(res, 401, "Invalid token");
+
+    // Prisma error
+    if (e.code === "P2025") return errorResponse(res, 404, "User not found");
+
     return errorResponse(res, 500, "Something went wrong");
   }
 };
