@@ -8,7 +8,7 @@ import {
   successResponse,
   verifyToken,
 } from "../utils";
-import type { AuthRequest } from "../middlewares";
+import type { AuthRequest, JwtPayload } from "../middlewares";
 import { sendOtpEmail, sendResetPasswordEmail } from "../services";
 import {
   forgotPasswordSchema,
@@ -107,8 +107,9 @@ export const loginController = async (req: Request, res: Response) => {
     const payload = {
       id: user.id,
       email: user.email,
+      isVerified: user.isVerified,
     };
-    const token = generateToken(payload);
+    const token = generateToken(payload as JwtPayload);
 
     return successResponse(res, 200, "User logged in successfully", {
       token,
