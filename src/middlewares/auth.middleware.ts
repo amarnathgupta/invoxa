@@ -7,7 +7,7 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET environment variable is not defined");
 }
 
-interface JwtPayload {
+export interface JwtPayload {
   id: string;
   email: string;
   isVerified: boolean;

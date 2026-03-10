@@ -20,6 +20,7 @@ model User {
   otpLastSentAt DateTime?
 
   organizations Organization[]
+  clients       Client[]
 
   @@index([deletedAt])
 }
@@ -44,7 +45,6 @@ model Organization {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   owner        User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  clients      Client[]
   invoices     Invoice[]
   deletedAt    DateTime?
 
@@ -55,13 +55,12 @@ model Organization {
 
 model Client {
   id             String  @id @default(uuid())
-  organizationId String
+  ownerId String
   name           String // Person behalf company
   companyName    String?
   email          String
-  phone          String
+  phone          String?
   website        String?
-  taxId          String?
 
   addressLine1 String?
   addressLine2 String?
@@ -77,12 +76,12 @@ model Client {
 
   deletedAt DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  owner User @relation(fields: [ownerId], references: [id])
   invoices     Invoice[]
 
   @@index([email])
   @@index([phone])
-  @@index([organizationId])
+  @@unique([ownerId, email])
 }
 
 model Invoice {
