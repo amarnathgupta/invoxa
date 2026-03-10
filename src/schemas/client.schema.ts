@@ -14,3 +14,8 @@ export const createClientInputSchema = z.object({
   postalCode: z.string().optional(),
   notes: z.string().optional(),
 });
+
+export const getPaginatedInputSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});

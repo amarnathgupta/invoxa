@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { errorResponse, successResponse } from "../utils";
 import type { AuthRequest } from "../middlewares";
-import { createClientInputSchema } from "../schemas";
+import { createClientInputSchema, getPaginatedInputSchema } from "../schemas";
 import z from "zod";
 import { prisma } from "../lib/prisma";
 
@@ -36,6 +36,54 @@ export const createClientController = async (
     if (e.code === "P2002") {
       return errorResponse(res, 409, "Client with this email already exists");
     }
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
+
+export const getAllClientsController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const result = getPaginatedInputSchema.safeParse(req.query);
+  if (!result.success) {
+    return errorResponse(
+      res,
+      400,
+      "Validation failed",
+      z.flattenError(result.error).fieldErrors,
+    );
+  }
+  const { page, limit } = result.data;
+
+  try {
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({
+        where: {
+          ownerId: req.user.id,
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: {
+          name: "asc",
+        },
+      }),
+      prisma.client.count({
+        where: {
+          ownerId: req.user.id,
+        },
+      }),
+    ]);
+    return successResponse(res, 200, "Clients fetched successfully", clients, {
+      limit: limit,
+      page: page,
+      total,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error("getAllClientsController error:", error);
     return errorResponse(res, 500, "Internal server error");
   }
 };
