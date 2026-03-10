@@ -87,3 +87,31 @@ export const getAllClientsController = async (
     return errorResponse(res, 500, "Internal server error");
   }
 };
+
+export const getClientByIdController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const { id } = req.params;
+  if (!id || typeof id !== "string") {
+    return errorResponse(res, 400, "Invalid id");
+  }
+  try {
+    const client = await prisma.client.findUnique({
+      where: {
+        id,
+        ownerId: req.user.id,
+      },
+    });
+    if (!client) {
+      return errorResponse(res, 404, "Client not found");
+    }
+    return successResponse(res, 200, "Client fetched successfully", client);
+  } catch (error) {
+    console.log("getClientByIdController error:", error);
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
