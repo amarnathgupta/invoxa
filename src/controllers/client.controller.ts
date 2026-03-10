@@ -60,13 +60,20 @@ export const getAllClientsController = async (
       z.flattenError(result.error).fieldErrors,
     );
   }
-  const { page, limit } = result.data;
+  const { page, limit, status } = result.data;
 
   try {
+    const deleted =
+      status === "deleted"
+        ? { deletedAt: { not: null } }
+        : status === "active"
+          ? { deletedAt: null }
+          : {};
     const [clients, total] = await Promise.all([
       prisma.client.findMany({
         where: {
           ownerId: req.user.id,
+          ...deleted,
         },
         skip: (page - 1) * limit,
         take: limit,
@@ -77,6 +84,7 @@ export const getAllClientsController = async (
       prisma.client.count({
         where: {
           ownerId: req.user.id,
+          ...deleted,
         },
       }),
     ]);
