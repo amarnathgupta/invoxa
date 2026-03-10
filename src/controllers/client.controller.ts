@@ -155,6 +155,38 @@ export const updateClientByIdController = async (
     return successResponse(res, 200, "Client updated successfully", client);
   } catch (error) {
     console.log("updateClientByIdController error:", error);
+    const e = error as { code: string };
+    if (e.code === "P2025") return errorResponse(res, 404, "Client not found");
+    return errorResponse(res, 500, "Internal server error");
+  }
+};
+
+export const deleteClientByIdController = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  if (!req.user) {
+    return errorResponse(res, 401, "Unauthorized");
+  }
+  const { id } = req.params;
+  if (!id || typeof id !== "string") {
+    return errorResponse(res, 400, "Invalid id");
+  }
+  try {
+    await prisma.client.update({
+      where: {
+        id,
+        ownerId: req.user.id,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+    return successResponse(res, 200, "Client deleted successfully");
+  } catch (error) {
+    console.log("deleteClientByIdController error:", error);
+    const e = error as { code: string };
+    if (e.code === "P2025") return errorResponse(res, 404, "Client not found");
     return errorResponse(res, 500, "Internal server error");
   }
 };
